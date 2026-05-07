@@ -892,3 +892,62 @@ with aba2:
 
             if not dict_impactos:
                 st.warning("⚠️ Selecione pelo menos uma natureza de despesa e informe um valor diferente de zero para simular.")
+            else:
+                df_atual = st.session_state.df_processado
+                df_atividade = df_atual[df_atual['Código'] == codigo_selecionado].copy()
+                
+                todas_naturezas = set(df_atividade['Natureza Base'].tolist() + list(dict_impactos.keys()))
+                dados_comp = []
+                
+                for nat in todas_naturezas:
+                    row_nat = df_atividade[df_atividade['Natureza Base'] == nat]
+                    saldo_dot = row_nat['Saldo com Reserva'].sum() if not row_nat.empty else 0.0
+                    proj_antes = row_nat['Total Projetado'].sum() if not row_nat.empty else 0.0
+                    final_antes = row_nat['Saldo Final'].sum() if not row_nat.empty else 0.0
+                    
+                    imp = dict_impactos.get(nat, 0.0)
+                    proj_depois = proj_antes + imp
+                    final_depois = saldo_dot - proj_depois
+                    
+                    if saldo_dot > 0 or imp != 0 or proj_antes > 0:
+                        dados_comp.append({
+                            "Natureza": nat, "Dotação Atual": saldo_dot, "Projetado (Antes)": proj_antes,
+                            "Impacto Simulado": imp, "Projetado (Depois)": proj_depois, "Saldo Final (Antes)": final_antes, "Saldo Final (Depois)": final_depois
+                        })
+                
+                df_comparativo = pd.DataFrame(dados_comp).sort_values("Natureza")
+                
+                st.divider()
+                st.subheader(f"⚖️ Quadro Comparativo — {sim_atividade_visual}")
+                
+                col_res1, col_res2 = st.columns([2, 1])
+                with col_res1:
+                    st.markdown("**Memória de Cálculo da Simulação:**")
+                    st.dataframe(df_simulacao.style.format({"Valor": "R$ {:,.2f}"}), hide_index=True, use_container_width=True)
+                with col_res2:
+                    status_cor = "🟢 Economia de" if impacto_final < 0 else "🔴 Custo de"
+                    st.metric(label=f"Impacto Financeiro Global ({status_cor})", value=fmt_br(abs(impacto_final)))
+
+                st.markdown("**Quadro Geral da Dotação (Antes vs Depois):**")
+                st.dataframe(
+                    df_comparativo.style.format({
+                        "Dotação Atual": "R$ {:,.2f}", "Projetado (Antes)": "R$ {:,.2f}", "Impacto Simulado": "R$ {:,.2f}", 
+                        "Projetado (Depois)": "R$ {:,.2f}", "Saldo Final (Antes)": "R$ {:,.2f}", "Saldo Final (Depois)": "R$ {:,.2f}"
+                    }).map(
+                        lambda x: 'color: red;' if x > 0 else ('color: green;' if x < 0 else ''), subset=['Impacto Simulado']
+                    ).map(
+                        lambda x: 'color: red;' if x < 0 else 'color: green;', subset=['Saldo Final (Antes)', 'Saldo Final (Depois)']
+                    ), 
+                    hide_index=True, use_container_width=True
+                )
+                
+                st.divider()
+                st.markdown("### 📥 Escolha o Formato da Simulação")
+                col_btnA, col_btnB, col_btnC = st.columns(3)
+                
+                with col_btnA:
+                    st.download_button("📄 Baixar em PDF", gerar_pdf_simulador(sim_atividade_visual, sim_operacao, sim_mes, impacto_final, df_comparativo, df_simulacao, sim_descricao), f"Simulacao_{codigo_selecionado}.pdf", "application/pdf", use_container_width=True)
+                with col_btnB:
+                    st.download_button("📝 Baixar em Word", gerar_word_simulador(sim_atividade_visual, sim_operacao, sim_mes, impacto_final, df_comparativo, df_simulacao, sim_descricao), f"Simulacao_{codigo_selecionado}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                with col_btnC:
+                    st.download_button("📊 Baixar em Excel", gerar_excel_simulador(df_comparativo, df_simulacao), f"Simulacao_{codigo_selecionado}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
