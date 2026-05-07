@@ -426,32 +426,33 @@ def gerar_pdf_simulador(atividade_nome, operacao, mes_inicio, impacto_final, df_
         else:
             pdf.set_fill_color(255, 255, 255) 
             
-        pdf.cell(larguras[0], 6, limpar_texto(row['Natureza Base']), border=1, align='C', fill=preenchimento)
-        pdf.cell(larguras[1], 6, limpar_texto(f_moeda_limpa(row['Saldo Dotação'])), border=1, align='R', fill=preenchimento)
-        pdf.cell(larguras[2], 6, limpar_texto(f_moeda_limpa(row['Proj. Antes'])), border=1, align='R', fill=preenchimento)
+        # AQUI FOI A CORREÇÃO: Utilizando as chaves corretas no df_comparativo
+        pdf.cell(larguras[0], 6, limpar_texto(row['Natureza']), border=1, align='C', fill=preenchimento)
+        pdf.cell(larguras[1], 6, limpar_texto(f_moeda_limpa(row['Dotação Atual'])), border=1, align='R', fill=preenchimento)
+        pdf.cell(larguras[2], 6, limpar_texto(f_moeda_limpa(row['Projetado (Antes)'])), border=1, align='R', fill=preenchimento)
         
-        if row['Impacto'] > 0:
+        if row['Impacto Simulado'] > 0:
             pdf.set_text_color(200, 0, 0)
-        elif row['Impacto'] < 0:
+        elif row['Impacto Simulado'] < 0:
             pdf.set_text_color(0, 150, 0)
         else:
             pdf.set_text_color(0, 0, 0)
-        pdf.cell(larguras[3], 6, limpar_texto(f_moeda_limpa(row['Impacto'])), border=1, align='R', fill=preenchimento)
+        pdf.cell(larguras[3], 6, limpar_texto(f_moeda_limpa(row['Impacto Simulado'])), border=1, align='R', fill=preenchimento)
         
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(larguras[4], 6, limpar_texto(f_moeda_limpa(row['Proj. Depois'])), border=1, align='R', fill=preenchimento)
+        pdf.cell(larguras[4], 6, limpar_texto(f_moeda_limpa(row['Projetado (Depois)'])), border=1, align='R', fill=preenchimento)
         
-        if row['Saldo Final Antes'] < 0:
+        if row['Saldo Final (Antes)'] < 0:
             pdf.set_text_color(200, 0, 0)
         else:
             pdf.set_text_color(0, 0, 0)
-        pdf.cell(larguras[5], 6, limpar_texto(f_moeda_limpa(row['Saldo Final Antes'])), border=1, align='R', fill=preenchimento)
+        pdf.cell(larguras[5], 6, limpar_texto(f_moeda_limpa(row['Saldo Final (Antes)'])), border=1, align='R', fill=preenchimento)
         
-        if row['Saldo Final Depois'] < 0:
+        if row['Saldo Final (Depois)'] < 0:
             pdf.set_text_color(200, 0, 0)
         else:
             pdf.set_text_color(0, 0, 0)
-        pdf.cell(larguras[6], 6, limpar_texto(f_moeda_limpa(row['Saldo Final Depois'])), border=1, align='R', fill=preenchimento)
+        pdf.cell(larguras[6], 6, limpar_texto(f_moeda_limpa(row['Saldo Final (Depois)'])), border=1, align='R', fill=preenchimento)
         
         pdf.set_text_color(0, 0, 0)
         pdf.ln()
@@ -729,7 +730,6 @@ with aba1:
         if filtro_selecionado != "Todas as atividades":
             df_final = df_final[df_final['Filtro Visual'] == filtro_selecionado]
 
-        # Filtra e organiza as colunas para o Word/Excel ficarem bonitos
         COLS_RELATORIO = ['Código', 'Atividade', 'Natureza Base', 'Saldo com Reserva', 'Liquidado', 'Projeção Salarial', 'Provisão 13º', 'Provisão Férias', 'Total Projetado', 'Saldo Final', 'Mês do Crédito']
         df_exp = df_final[COLS_RELATORIO].copy()
         df_exp.columns = ['Cód', 'Atividade', 'Natureza', 'Saldo Atual', 'Liquidado', 'Proj. Sal.', 'Prov. 13º', 'Prov. Férias', 'Total Projet.', 'Saldo Final', 'Situação']
@@ -892,62 +892,3 @@ with aba2:
 
             if not dict_impactos:
                 st.warning("⚠️ Selecione pelo menos uma natureza de despesa e informe um valor diferente de zero para simular.")
-            else:
-                df_atual = st.session_state.df_processado
-                df_atividade = df_atual[df_atual['Código'] == codigo_selecionado].copy()
-                
-                todas_naturezas = set(df_atividade['Natureza Base'].tolist() + list(dict_impactos.keys()))
-                dados_comp = []
-                
-                for nat in todas_naturezas:
-                    row_nat = df_atividade[df_atividade['Natureza Base'] == nat]
-                    saldo_dot = row_nat['Saldo com Reserva'].sum() if not row_nat.empty else 0.0
-                    proj_antes = row_nat['Total Projetado'].sum() if not row_nat.empty else 0.0
-                    final_antes = row_nat['Saldo Final'].sum() if not row_nat.empty else 0.0
-                    
-                    imp = dict_impactos.get(nat, 0.0)
-                    proj_depois = proj_antes + imp
-                    final_depois = saldo_dot - proj_depois
-                    
-                    if saldo_dot > 0 or imp != 0 or proj_antes > 0:
-                        dados_comp.append({
-                            "Natureza": nat, "Dotação Atual": saldo_dot, "Projetado (Antes)": proj_antes,
-                            "Impacto Simulado": imp, "Projetado (Depois)": proj_depois, "Saldo Final (Antes)": final_antes, "Saldo Final (Depois)": final_depois
-                        })
-                
-                df_comparativo = pd.DataFrame(dados_comp).sort_values("Natureza")
-                
-                st.divider()
-                st.subheader(f"⚖️ Quadro Comparativo — {sim_atividade_visual}")
-                
-                col_res1, col_res2 = st.columns([2, 1])
-                with col_res1:
-                    st.markdown("**Memória de Cálculo da Simulação:**")
-                    st.dataframe(df_simulacao.style.format({"Valor": "R$ {:,.2f}"}), hide_index=True, use_container_width=True)
-                with col_res2:
-                    status_cor = "🟢 Economia de" if impacto_final < 0 else "🔴 Custo de"
-                    st.metric(label=f"Impacto Financeiro Global ({status_cor})", value=fmt_br(abs(impacto_final)))
-
-                st.markdown("**Quadro Geral da Dotação (Antes vs Depois):**")
-                st.dataframe(
-                    df_comparativo.style.format({
-                        "Dotação Atual": "R$ {:,.2f}", "Projetado (Antes)": "R$ {:,.2f}", "Impacto Simulado": "R$ {:,.2f}", 
-                        "Projetado (Depois)": "R$ {:,.2f}", "Saldo Final (Antes)": "R$ {:,.2f}", "Saldo Final (Depois)": "R$ {:,.2f}"
-                    }).map(
-                        lambda x: 'color: red;' if x > 0 else ('color: green;' if x < 0 else ''), subset=['Impacto Simulado']
-                    ).map(
-                        lambda x: 'color: red;' if x < 0 else 'color: green;', subset=['Saldo Final (Antes)', 'Saldo Final (Depois)']
-                    ), 
-                    hide_index=True, use_container_width=True
-                )
-                
-                st.divider()
-                st.markdown("### 📥 Escolha o Formato da Simulação")
-                col_btnA, col_btnB, col_btnC = st.columns(3)
-                
-                with col_btnA:
-                    st.download_button("📄 Baixar em PDF", gerar_pdf_simulador(sim_atividade_visual, sim_operacao, sim_mes, impacto_final, df_comparativo, df_simulacao, sim_descricao), f"Simulacao_{codigo_selecionado}.pdf", "application/pdf", use_container_width=True)
-                with col_btnB:
-                    st.download_button("📝 Baixar em Word", gerar_word_simulador(sim_atividade_visual, sim_operacao, sim_mes, impacto_final, df_comparativo, df_simulacao, sim_descricao), f"Simulacao_{codigo_selecionado}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-                with col_btnC:
-                    st.download_button("📊 Baixar em Excel", gerar_excel_simulador(df_comparativo, df_simulacao), f"Simulacao_{codigo_selecionado}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
