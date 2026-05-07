@@ -3,3 +3,5 @@ pdfplumber
 pandas
 fpdf
 requests
+python-docx
+openpyxl
